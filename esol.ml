@@ -15,43 +15,48 @@ let rec indVarCheck list = match list with
 
 let arity arg = match arg with
   PredicateSig n -> n 
-  |_ -> -1;;                                            
+  |_ -> -1;;               
 
- let appCheckT form = match form with
-  App (t,l) -> (match t with
-                Lambda (x, g) -> ((List.length x) = (List.length l)) && (indVarCheck x)
-                |Constant (s,arg) -> (List.length l) = (arity arg) 
-                |Variable (s,arg) -> (List.length l) = (arity arg))
-  |_ -> true;;              
+let rec mapBool cond list = match list with
+ [] -> true
+| a:: b -> if (cond a) then (mapBool cond b) else false;;
+
  
-
-let rec quantCheck form = match form with 
-  Forall (x,y,f) ->   (match x with
-                      Variable (a,b) -> quantCheck f
-                      |_ -> false)
- | Exists (x,y,f) ->  (match x with
-                         Variable (a,b) -> quantCheck f
-                       |_ -> false)
-
- | And (f,g)  ->  (quantCheck f) && (quantCheck g)
- | Or (f,g)    ->   (quantCheck f) && (quantCheck g)
- | Imp (f,g)   ->  (quantCheck f) && (quantCheck g)
- | Neg f     -> quantCheck f
+let rec appCheckT term = match term with
+  Lambda (x, g) -> appCheckF g 
+  |_ -> true
+ and  appCheckF form = match form with 
+  Forall (x,y,f) ->  appCheckF f
+ | Exists (x,y,f) -> appCheckF f
+ | And (f,g)  ->  (appCheckF f) && (appCheckF g)
+ | Or (f,g)    ->   (appCheckF f) && (appCheckF g)
+ | Imp (f,g)   ->  (appCheckF f) && (appCheckF g)
+ | Neg f     -> appCheckF f
  | App (t,l) -> (match t with 
-                  Lambda (x,g)  ->  quantCheck g 
-                 |_ -> true )
+                  Lambda (x,g)  -> ((List.length x) = (List.length l)) && (indVarCheck x) && appCheckF g && (mapBool appCheckT l)
+                |Constant (s,arg) -> (List.length l) = (arity arg) && (mapBool appCheckT l)  
+                |Variable (s,arg) -> (List.length l) = (arity arg)) && (mapBool appCheckT l)
  |_ -> true;;
 
-let rec appCheck form = match form with 
-  Forall (x,y,f) ->  appCheck f
- | Exists (x,y,f) -> appCheck f
- | And (f,g)  ->  (appCheck f) && (appCheck g)
- | Or (f,g)    ->   (appCheck f) && (appCheck g)
- | Imp (f,g)   ->  (appCheck f) && (appCheck g)
- | Neg f     -> appCheck f
- | App (t,l) -> appCheckT (App (t,l)) &&  (match t with 
-                  Lambda (x,g)  ->  appCheck g 
-                 |_ -> true )
+
+
+let rec quantCheckT term = match term with
+  Lambda (x, g) -> quantCheckF g 
+  |_ -> true
+ and  quantCheckF form = match form with 
+  Forall (x,y,f) ->  (match x with
+                         Variable (a,b) -> quantCheckF f
+                         |_ -> true)
+ | Exists (x,y,f) ->  (match x with
+                         Variable (a,b) -> quantCheckF f
+                         |_ -> true)
+ | And (f,g)  ->  (quantCheckF f) && (quantCheckF g)
+ | Or (f,g)    ->   (quantCheckF f) && (quantCheckF g)
+ | Imp (f,g)   ->  (quantCheckF f) && (quantCheckF g)
+ | Neg f     -> quantCheckF f
+ | App (t,l) -> (match t with 
+                  Lambda (x,g)  ->  quantCheckF g && (mapBool quantCheckT l)
+                |_ -> mapBool quantCheckT l )
  |_ -> true;;
 
 
