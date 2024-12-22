@@ -1,4 +1,16 @@
 
+
+type info = Info of int*bool;;
+
+type argumentSig = PredicateSig of int | IndividualSig;;
+type formula = Bot | App of term*(term list) | 
+And of formula*formula | Or of formula*formula | 
+Neg of formula | Imp of formula*formula | 
+Forall of term*formula | Exists of term*formula
+and term = Constant of string*argumentSig | 
+Variable of string*(argumentSig*info) | Lambda of (term list)* formula;;
+
+
 let opt_to_bool op = match op with
  Some x -> true
 |None -> false;;
@@ -13,6 +25,17 @@ let rec lookup k = function
 
 let insert k v lst = (k, v) :: lst
 
+let parenthesis list = if (List.length list) < 3 then false else if (List.nth list 0) = "(" && (List.nth (List.rev list) 0 ) = ")" then true else false;;
+
+let rec inner list = match list with
+ a::b -> List.rev (outer b) 
+|_ -> []
+and
+outer list = match List.rev list with
+a::b -> b
+|_ ->[];;
+
+
 
 let rec bin_op sep parser1 parser2 pairexp = match pairexp with
   (a,b::c) -> if opt_to_bool (parser1 (List.rev a)) && opt_to_bool(parser2 c) && b = sep then Some (List.rev a, c) else bin_op sep parser1 parser2 (b::a ,  c)
@@ -25,38 +48,45 @@ let rec sep_star sep parser pairexp = match pairexp with
  | (a,[]) -> None;;
 
 let rec star parser pairexp = match pairexp with
-  (a,b::c) ->  if opt_to_bool( parser (List.rev a)) && opt_to_bool(star parser ([],b::c))  then Some ((List.rev a)::opt_to_list (star parser ([],b::c) ))
+  |([],[])  ->  Some []
+  |(a,b::c) ->  if opt_to_bool( parser (List.rev a)) && opt_to_bool(star parser ([],b::c))  then Some ((List.rev a)::opt_to_list (star parser ([],b::c) ))
    else star parser (b::a,c)
- | (a,[]) -> None;;
+ | (a,[]) -> if opt_to_bool (parser (List.rev a)) then Some [a]  else None;;
 
 let simple_parse list exp = if List.length exp = 1 && List.mem (List.nth exp 0) list then Some true else None;;
 
-let variable_parser dic exp = if List.length exp = 1 && opt_to_bool(lookup (List.nth exp 0) dic) then (match  lookup (List.nth exp 0) dic with
- Some (x,y) -> Some (Variable (List.nth exp 0 , (x , y))  )
-| None -> None )  else None;;
+let const_dic = ref [("c", IndividualSig)];;
+let var_dic = ref [("x", (IndividualSig, Info (0,false)))];;
 
-let constant_parser dic exp = if List.length exp = 1 && opt_to_bool(lookup (List.nth exp 0) dic) then (match  lookup (List.nth exp 0) dic with
+let variable_parser  exp = if List.length exp = 1 && opt_to_bool(lookup (List.nth exp 0) !var_dic) then (match  lookup (List.nth exp 0) !var_dic with
+ Some (x,y) -> Some (  Variable (List.nth exp 0 ,  (x , y) )  )
+| None -> None )  else None;; 
+
+let constant_parser  exp = if List.length exp = 1 && opt_to_bool(lookup (List.nth exp 0) !const_dic) then (match  lookup (List.nth exp 0) !const_dic with
  Some x -> Some (Constant (List.nth exp 0 , x )  )
 | None -> None )  else None;;
-
 
 let rec or_parser parser_list exp = match parser_list with
  a::b -> if  opt_to_bool (a exp) then (a exp) else or_parser b exp
 |_ -> None;;
 
 
+let opt_to_form  o = match o with
+Some x -> x
+| None -> Bot;; 
+
+let rec pre_and_parser parser pairexp = match pairexp with
+  (a,b::c) -> if opt_to_bool (parser (List.rev a)) && opt_to_bool(parser c) && b = "&"
+   then Some (And (opt_to_form (parser (List.rev a)), opt_to_form (parser c)) )  else pre_and_parser parser (b::a ,  c)
+  | (a,[]) -> None;;
+
+let and_parser parser exp = if List.length exp > 2 && parenthesis exp then pre_and_parser parser ([],inner exp) else None;;
+
+let bot_parser exp = if List.length exp = 1 && List.nth exp 0 = "_|_" then Some Bot else None;;
+
+let rec parser_test exp = if opt_to_bool (bot_parser exp) then bot_parser exp else and_parser parser_test exp;;
 
 
-
-type info = Info of int*bool;;
-
-type argumentSig = PredicateSig of int | IndividualSig;;
-type formula = Bot | App of term*(term list) | 
-And of formula*formula | Or of formula*formula | 
-Neg of formula | Imp of formula*formula | 
-Forall of term*formula | Exists of term*formula
-and term = Constant of string*argumentSig | 
-Variable of string*(argumentSig*info) | Lambda of (term list)* formula;;
 
 let rec indVarCheck list = match list with
  []    -> true
