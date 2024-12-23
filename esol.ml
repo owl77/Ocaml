@@ -132,11 +132,13 @@ let opt_list_var exp = let aux =(star variable_parser ([],exp)) in if opt_to_boo
  Some list -> Some (opt_list variable_parser list)
 |None -> None) else None;;  
 
-
+let tail list = match list with
+a::b -> b
+|_ -> [];;
 
 let rec pre_lambda_parser parser exppair = match exppair with
- (a1::a2, b::c) -> let aux1::aux2 = List.rev (a1::a2) in let f = parser (b::c) in let v = opt_list_var aux2 in if aux1 = "lambda" && 
- opt_to_bool v  && opt_to_bool f  then let v = opt_list_var aux2 in  Some (opt_lambda v f)  else  (pre_lambda_parser parser)  (b::a1::a2 , c)
+ (a1::a2, b::c) -> let aux = List.rev (a1::a2) in let f = parser (b::c) in let v = opt_list_var (tail aux) in if List.nth aux 0 = "lambda" && 
+ opt_to_bool v  && opt_to_bool f  then let v = opt_list_var (tail aux) in  Some (opt_lambda v f)  else  (pre_lambda_parser parser)  (b::a1::a2 , c)
  |([], b::c) -> (pre_lambda_parser parser)  (b::[] , c)
  |(a,[]) -> None;;
 
