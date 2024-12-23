@@ -55,8 +55,8 @@ let rec star parser pairexp = match pairexp with
 
 let simple_parse list exp = if List.length exp = 1 && List.mem (List.nth exp 0) list then Some true else None;;
 
-let const_dic = ref [("c", IndividualSig)];;
-let var_dic = ref [("x", (IndividualSig, Info (0,false)))];;
+let const_dic = ref [("*", IndividualSig)];;
+let var_dic = ref [("x", (IndividualSig, Info (0,false))) ;("y", (IndividualSig, Info (0,false)))   ];;
 
 let variable_parser  exp = if List.length exp = 1 && opt_to_bool(lookup (List.nth exp 0) !var_dic) then (match  lookup (List.nth exp 0) !var_dic with
  Some (x,y) -> Some (  Variable (List.nth exp 0 ,  (x , y) )  )
@@ -85,6 +85,63 @@ let and_parser parser exp = if List.length exp > 2 && parenthesis exp then pre_a
 let bot_parser exp = if List.length exp = 1 && List.nth exp 0 = "_|_" then Some Bot else None;;
 
 let rec parser_test exp = if opt_to_bool (bot_parser exp) then bot_parser exp else and_parser parser_test exp;;
+
+let opt_forall x y = match x with 
+ Some a -> (match y with 
+             Some b -> Forall (a,b)  
+             |_ -> Bot)
+ |_ -> Bot;; 
+
+ let opt_exists x y = match x with 
+ Some a -> (match y with 
+             Some b -> Forall (a,b)  
+             |_ -> Bot)
+ |_ -> Bot;; 
+
+let opt_lambda x y = match x with 
+ Some a -> (match y with 
+             Some b -> Lambda (a,b)  
+             |_ -> Constant ("*", IndividualSig))
+ |_ -> Constant("*", IndividualSig);;            
+
+
+let rec pre_forall_parser parser exppair = match exppair with
+ (a, b::c) ->let aux = List.rev a in let f = parser (b::c) in if List.length a = 2 &&  let v = variable_parser [List.nth aux 1] in List.nth aux 0 = "forall" && 
+ opt_to_bool v  && opt_to_bool f  then let v = variable_parser [List.nth aux 1] in  Some (opt_forall v f)  else  (pre_forall_parser parser)  (b::a , c)
+ |(a,[]) -> None;;
+
+
+let forall_parser parser exp = pre_forall_parser parser ([],exp);;
+
+
+let rec pre_exists_parser parser exppair = match exppair with
+ (a, b::c) ->let aux = List.rev a in let f = parser (b::c) in if List.length a = 2 &&  let v = variable_parser [List.nth aux 1] in List.nth aux 0 = "forall" && 
+ opt_to_bool v  && opt_to_bool f  then let v = variable_parser [List.nth aux 1] in  Some (opt_exists v f)  else  (pre_exists_parser parser)  (b::a , c)
+ |(a,[]) -> None;;
+
+
+let exists_parser parser exp = pre_exists_parser parser ([],exp);;
+
+let rec opt_list parser l = match l with
+ a::b -> if opt_to_bool (parser a) then (match parser a with
+                                          Some w ->  w::opt_list parser b 
+                                          |_ -> []) else []
+ |_ -> [];;                                         
+
+let opt_list_var exp = let aux =(star variable_parser ([],exp)) in if opt_to_bool aux then (match aux with
+ Some list -> Some (opt_list variable_parser list)
+|None -> None) else None;;  
+
+
+
+let rec pre_lambda_parser parser exppair = match exppair with
+ (a1::a2, b::c) -> let aux1::aux2 = List.rev (a1::a2) in let f = parser (b::c) in let v = opt_list_var aux2 in if aux1 = "lambda" && 
+ opt_to_bool v  && opt_to_bool f  then let v = opt_list_var aux2 in  Some (opt_lambda v f)  else  (pre_lambda_parser parser)  (b::a1::a2 , c)
+ |([], b::c) -> (pre_lambda_parser parser)  (b::[] , c)
+ |(a,[]) -> None;;
+
+
+let lambda_parser parser exp = pre_lambda_parser parser ([],exp);;
 
 
 
