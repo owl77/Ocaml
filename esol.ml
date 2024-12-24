@@ -55,7 +55,7 @@ let rec star parser pairexp = match pairexp with
 
 let simple_parse list exp = if List.length exp = 1 && List.mem (List.nth exp 0) list then Some true else None;;
 
-let const_dic = ref [("*", IndividualSig)];;
+let const_dic = ref [("*", IndividualSig); ("C", PredicateSig 1) ];;
 let var_dic = ref [("x", (IndividualSig, Info (0,false))) ;("y", (IndividualSig, Info (0,false)))   ];;
 
 let variable_parser  exp = if List.length exp = 1 && opt_to_bool(lookup (List.nth exp 0) !var_dic) then (match  lookup (List.nth exp 0) !var_dic with
@@ -102,7 +102,13 @@ let opt_lambda x y = match x with
  Some a -> (match y with 
              Some b -> Lambda (a,b)  
              |_ -> Constant ("*", IndividualSig))
- |_ -> Constant("*", IndividualSig);;            
+ |_ -> Constant("*", IndividualSig);;     
+
+let opt_app x y = match x with 
+ Some a -> (match y with 
+             Some b -> App (a,b)  
+             |_ -> Bot)
+ |_ -> Bot;;    
 
 
 let rec pre_forall_parser parser exppair = match exppair with
@@ -145,6 +151,9 @@ let rec pre_lambda_parser parser exppair = match exppair with
 
 let lambda_parser parser exp = pre_lambda_parser parser ([],exp);;
 
+let opt_list_app parser exp = let aux =(star parser ([],exp)) in if opt_to_bool aux then (match aux with
+ Some list -> Some (opt_list parser list)
+|None -> None) else None;;  
 
 
 let rec indVarCheck list = match list with
@@ -155,7 +164,20 @@ let rec indVarCheck list = match list with
 
 let arity arg = match arg with
   PredicateSig n -> n 
-  |_ -> -1;;               
+  |_ -> -1;;  
+
+let check_app t l = match t,l with 
+                 Some Lambda (x,g), Some m  -> ((List.length x) = (List.length m))
+                |Some Constant (s,arg), Some m -> (List.length m) = (arity arg)  
+                |Some Variable (s,(arg,i)), Some m -> (List.length m) = (arity arg) 
+                |_ -> false;; 
+
+let rec pre_app_parser parser exppair = match exppair with
+ (a, b::c) -> let t = parser (List.rev a) in let args = opt_list_app parser (b::c) in if opt_to_bool t && opt_to_bool args && check_app t args then 
+ let t = parser (List.rev a) in let args = opt_list_app parser (b::c) in Some (opt_app t args) else pre_app_parser parser (b::a,c)
+|(a,[]) -> None;;
+
+let app_parser parser exp = pre_app_parser parser ([],exp);;
 
 let rec mapBool cond list = match list with
  [] -> true
