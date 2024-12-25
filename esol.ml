@@ -1,5 +1,4 @@
 
-
 type info = Info of int*bool;;
 
 type argumentSig = PredicateSig of int | IndividualSig;;
@@ -9,7 +8,6 @@ Neg of formula | Imp of formula*formula |
 Forall of term*formula | Exists of term*formula
 and term = Constant of string*argumentSig | 
 Variable of string*(argumentSig*info) | Lambda of (term list)* formula;;
-
 
 let opt_to_bool op = match op with
  Some x -> true
@@ -34,7 +32,6 @@ and
 outer list = match List.rev list with
 a::b -> b
 |_ ->[];;
-
 
 
 let rec bin_op sep parser1 parser2 pairexp = match pairexp with
@@ -66,8 +63,8 @@ let constant_parser  exp = if List.length exp = 1 && opt_to_bool(lookup (List.nt
  Some x -> Some (Constant (List.nth exp 0 , x )  )
 | None -> None )  else None;;
 
-let rec or_parser parser_list exp = match parser_list with
- a::b -> if  opt_to_bool (a exp) then (a exp) else or_parser b exp
+let rec list_parser parser_list exp = match parser_list with
+ a::b -> if  opt_to_bool (a exp) then (a exp) else list_parser b exp
 |_ -> None;;
 
 
@@ -81,6 +78,22 @@ let rec pre_and_parser parser pairexp = match pairexp with
   | (a,[]) -> None;;
 
 let and_parser parser exp = if List.length exp > 2 && parenthesis exp then pre_and_parser parser ([],inner exp) else None;;
+
+
+let rec pre_or_parser parser pairexp = match pairexp with
+  (a,b::c) -> if opt_to_bool (parser (List.rev a)) && opt_to_bool(parser c) && b = "or"
+   then Some (And (opt_to_form (parser (List.rev a)), opt_to_form (parser c)) )  else pre_or_parser parser (b::a ,  c)
+  | (a,[]) -> None;;
+
+let or_parser parser exp = if List.length exp > 2 && parenthesis exp then pre_or_parser parser ([],inner exp) else None;;
+
+let rec pre_imp_parser parser pairexp = match pairexp with
+  (a,b::c) -> if opt_to_bool (parser (List.rev a)) && opt_to_bool(parser c) && b = "&"
+   then Some (And (opt_to_form (parser (List.rev a)), opt_to_form (parser c)) )  else pre_imp_parser parser (b::a ,  c)
+  | (a,[]) -> None;;
+
+let imp_parser parser exp = if List.length exp > 2 && parenthesis exp then pre_imp_parser parser ([],inner exp) else None;;
+
 
 let bot_parser exp = if List.length exp = 1 && List.nth exp 0 = "_|_" then Some Bot else None;;
 
@@ -155,7 +168,6 @@ let opt_list_app parser exp = let aux =(star parser ([],exp)) in if opt_to_bool 
  Some list -> Some (opt_list parser list)
 |None -> None) else None;;  
 
-
 let rec indVarCheck list = match list with
  []    -> true
  | a:: b ->  match a with
@@ -167,7 +179,7 @@ let arity arg = match arg with
   |_ -> -1;;  
 
 let check_app t l = match t,l with 
-                 Some Lambda (x,g), Some m  -> ((List.length x) = (List.length m))
+                 Some Lambda (x,g), Some m  -> ((List.length x) = (List.length m))  && (indVarCheck x)
                 |Some Constant (s,arg), Some m -> (List.length m) = (arity arg)  
                 |Some Variable (s,(arg,i)), Some m -> (List.length m) = (arity arg) 
                 |_ -> false;; 
@@ -178,6 +190,13 @@ let rec pre_app_parser parser exppair = match exppair with
 |(a,[]) -> None;;
 
 let app_parser parser exp = pre_app_parser parser ([],exp);;
+
+let rec formula_parser exp = list_parser [bot_parser  ; and_parser formula_parser; or_parser formula_parser; imp_parser formula_parser;
+forall_parser formula_parser; exists_parser formula_parser; app_parser term_parser] exp
+and
+term_parser exp = list_parser [lambda_parser formula_parser; constant_parser; variable_parser] exp;;
+
+
 
 let rec mapBool cond list = match list with
  [] -> true
